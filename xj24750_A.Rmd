@@ -1,0 +1,239 @@
+---
+title: "Summative Assessment Section A"
+author: "Benjamin Owens"
+date: "2024-11-18"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Section A 
+
+Import libraries that will be used in this markdown file.
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(dplyr)
+```
+
+
+### Q1
+
+First, load the file "debt_data.csv" into an R data frame called "debt_df", load the file "country_data.csv" into an R data frame called "country_df", and load the file "indicator_data.csv" into a data frame called "indicator_df".
+```{r, message=FALSE, warning=FALSE}
+debt_df <- read_csv('debt_data.csv')
+country_df <- read_csv('country_data.csv')
+indicator_df <- read_csv('indicator_data.csv')
+```
+
+Second, use R to check the number of columns and the number of rows that the data frame "debt_df" has. Display your results.
+```{r, message=FALSE, warning=FALSE}
+nrow(debt_df)
+ncol(debt_df)
+```
+To determine the number of rows and columns in the `debt_df` data frame, I used the `nrow()` and `ncol()` functions. The data frame has 13,824 rows and 63 columns.
+
+### Q2
+
+Update "debt_df" by reordering its rows such that the values of the indicator "DT.NFL.BLAT.CD" is in descending order. 
+```{r, message=FALSE, warning=FALSE}
+debt_df <- debt_df %>%
+  arrange(desc(DT.NFL.BLAT.CD))
+head(debt_df)
+```
+
+Display a subset of the updated "debt_df" consisting of the first 4 rows and the columns "Country.Code", "Year", "NY.GNP.MKTP.CD", and "DT.NFL.BLAT.CD".
+```{r, message=FALSE, warning=FALSE}
+subset_df1 <- debt_df %>%
+  select(Country.Code, Year, NY.GNP.MKTP.CD, DT.NFL.BLAT.CD) %>%
+  slice(1:4)
+print(subset_df1)
+```
+
+
+### Q3
+
+```{r}
+head(debt_df)
+```
+Create a new data frame called "debt_df2" by combining the data from the two data frames "debt_df" and "indicator_df". The new data frame "debt_df2" should be equivalent to "debt_df" except that "debt_df2" now contains indicator names rather than indicator codes. The indicator names in "debt_df2" should match the indicator codes in "debt_df" according to their correspondence described in "indicator_df".
+
+First, create a mapping of indicator codes to indicator names.
+```{r}
+indicator_map <- setNames(indicator_df$INDICATOR_NAME, indicator_df$INDICATOR_CODE)
+```
+
+Update the column names of debt_df by checking if they exist in indicator_map.
+```{r}
+debt_df2 <- debt_df %>%
+  setNames(ifelse(
+    names(debt_df) %in% names(indicator_map),
+    indicator_map[names(debt_df)], # Replace indicator codes with names
+    names(debt_df)                 # Keep other column names unchanged
+  ))
+```
+
+```{r}
+head(debt_df)
+head(debt_df2)
+```
+
+Display a subset of "debt_df2" consisting of the first 5 rows and the three columns "Country.Code", "Year", and "Net financial flows, others (NFL, current US$)".
+```{r}
+subset_df2 <- debt_df2 %>%
+  select(`Country.Code`, `Year`, `Net financial flows, others (NFL, current US$)`) %>%
+  slice(1:5)
+
+print(subset_df2)
+```
+
+### Q4
+
+Create a new data frame called "debt_df3" by combining data from the two data frames "debt_df2" and "country_df". The new data frame "debt_df3" should contains a) all columns from "debt_df2" and b) 3 columns from "country_df" called "Region", "IncomeGroup", and "Country.Name".
+```{r}
+debt_df3 <- debt_df2 %>%
+  left_join(
+    country_df %>% select(Country.Code, Region, IncomeGroup, Country.Name), 
+    by = "Country.Code"
+  )
+
+print(dim(debt_df3))
+print(colnames(debt_df3))
+head(debt_df3)
+```
+
+Display a subset of "debt_df3" consisting of the first three rows and 4 columns called "Country.Name", "IncomeGroup", "Year", and "Total reserves in months of imports".
+```{r}
+subset_df3 <- debt_df3 %>%
+  select(`Country.Name`, `IncomeGroup`, `Year`, `Total reserves in months of imports`) %>%
+  slice(1:3)
+
+print(subset_df3)
+```
+
+### Q5
+
+```{r}
+debt_df3 <- debt_df3 %>%
+  rename(
+    Total_reserves = 'Total reserves in months of imports',
+    External_debt = 'External debt stocks, total (DOD, current US$)',
+    Financial_flow = 'Net financial flows, bilateral (NFL, current US$)',
+    Imports = 'Imports of goods, services and primary income (BoP, current US$)',
+    IFC = 'IFC, private nonguaranteed (NFL, US$)'
+  )
+
+print(colnames(debt_df3))
+```
+
+### Q6
+
+Your summary data frame “debt_summary” should contain 7 rows corresponding to the 7 different Regions, and it should also have 5 columns:
+"Region" - the names of the 7 different regions including "East Asia & Pacific", "Europe & Central Asia" etc.
+"TR_mn" - the average of "Total_reserves" in each region.
+"ED_md" - the median of "External_debt" in each region.
+"FF_quantile" - the 0.2 quantile of "Financial_flow" in each region.
+"IFC_sd" - the standard deviation of "IFC" in each region.
+```{r}
+debt_summary <- debt_df3 %>%
+  group_by(Region) %>%
+  summarise(
+    TR_mn = mean(Total_reserves, na.rm=TRUE),
+    ED_md = median(External_debt, na.rm=TRUE),
+    FF_quantile = quantile(Financial_flow, 0.2, na.rm=TRUE),
+    IFC_sd = sd(IFC, na.rm=TRUE)
+  )
+
+print(debt_summary)
+```
+
+### Q7
+
+```{r}
+filtered_debt_df <- debt_df3 %>%
+  filter(!is.na(Financial_flow),
+         Financial_flow >= -1e8,
+         Financial_flow <= 1e8)
+
+violin_plot <- ggplot(filtered_debt_df, aes(x=Financial_flow, y=Region, color=Region)) +
+  geom_violin(fill='white') +
+  labs(
+    x='Financial Flow',
+    y='Region'
+  ) +
+  theme_minimal() +
+  theme(
+    panel.border = element_rect(color = 'black', fill = NA, size = 1),
+    axis.text=element_text(size=10),
+    axis.title=element_text(size=12)
+  )
+
+print(violin_plot)
+```
+
+### Q8
+
+```{r}
+debt_df3 <- debt_df3 %>%
+  mutate(Year = as.numeric(gsub('year_', '', Year))) # Remove prefix and convert to numeric
+
+filtered_debt_df2 <- debt_df3 %>%
+  filter(
+    Country.Name %in% c('Italy', 'France', 'United Kingdom', 'Sudan', 'Afghanistan', 'Brazil'),
+    Year >= 1960, Year <= 2023
+    ) %>%
+  select(Country.Name, Year, Total_reserves, IncomeGroup) %>%
+  filter(!is.na(Total_reserves))
+```
+
+
+
+
+```{r}
+plot <- ggplot(filtered_debt_df2, aes(x=Year, y=Total_reserves, color=Country.Name, group = Country.Name)) +
+  geom_line(size=0.5, na.rm=TRUE) +
+  geom_point(size=1.5, na.rm=TRUE) +
+  facet_wrap(~ IncomeGroup) +
+  scale_x_continuous(breaks = seq(1960, 2023, by=10)) +
+  labs(
+    x='Year',
+    y='Total Reserves',
+    color='Country Name'
+  ) +
+  theme_minimal() +
+  theme(
+    panel.border = element_rect(color='black', fill=NA, size=1),
+    axis.text = element_text(size=10),
+    axis.title = element_text(size=12),
+    strip.background = element_rect(fill='gray90', color='black', size=1)
+  )
+
+print(plot)
+```
+
+```{r}
+filtered_debt_df2 %>%
+  filter(Country.Name == 'Afghanistan') %>%
+  select(Year, Total_reserves) %>%
+  arrange(Year)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
